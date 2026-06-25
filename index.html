@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Roulette</title>
+<style>
+  :root{
+    --felt: #0b5c33;
+    --felt-dark: #073d22;
+    --gold: #d4af37;
+    --red: #c0252c;
+    --black: #1a1a1a;
+    --green: #1f8a4c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background: radial-gradient(ellipse at center, #1a1a1a 0%, #000 100%);
+    font-family: 'Segoe UI', Georgia, serif;
+    color:#f4e9d8;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px;
+  }
+  h1{
+    font-family: Georgia, serif;
+    letter-spacing:4px;
+    color:var(--gold);
+    text-shadow:0 0 12px rgba(212,175,55,.5);
+    margin:8px 0 4px;
+  }
+  .subtitle{color:#a89a7e; margin-bottom:20px; font-size:14px;}
+
+  .balance-bar{
+    display:flex;
+    gap:30px;
+    background:linear-gradient(180deg,#1c1c1c,#0d0d0d);
+    border:1px solid var(--gold);
+    border-radius:12px;
+    padding:14px 30px;
+    margin-bottom:20px;
+    box-shadow:0 0 20px rgba(0,0,0,.6);
+  }
+  .balance-bar .stat{text-align:center;}
+  .balance-bar .label{font-size:11px; color:#a89a7e; letter-spacing:2px; text-transform:uppercase;}
+  .balance-bar .value{font-size:22px; font-weight:bold; color:var(--gold);}
+  .balance-bar .value.neg{color:var(--red);}
+  .balance-bar .value.pos{color:#3fcf6f;}
+
+  .table{
+    display:flex;
+    gap:40px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+
+  /* WHEEL */
+  .wheel-area{
+    position:relative;
+    width:340px;
+    height:340px;
+    flex-shrink:0;
+  }
+  .pointer{
+    position:absolute;
+    top:-6px; left:50%;
+    transform:translateX(-50%);
+    width:0; height:0;
+    border-left:12px solid transparent;
+    border-right:12px solid transparent;
+    border-top:20px solid var(--gold);
+    z-index:5;
+    filter:drop-shadow(0 0 4px #000);
+  }
+  .wheel-rim{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background: radial-gradient(circle at 50% 50%, #3a2a10, #1a1206 70%);
+    border:6px solid var(--gold);
+    box-shadow: 0 0 30px rgba(212,175,55,.4), inset 0 0 20px rgba(0,0,0,.8);
+  }
+  .wheel{
+    position:absolute;
+    inset:18px;
+    border-radius:50%;
+    transition: transform 4s cubic-bezier(.12,.7,.1,1);
+    border:3px solid #2a1d08;
+    box-shadow: inset 0 0 0 6px #0d0a04, inset 0 0 25px rgba(0,0,0,.7);
+  }
+  .wheel-sep{
+    position:absolute;
+    top:50%; left:50%;
+    width:1px; height:50%;
+    background:linear-gradient(to bottom, rgba(212,175,55,.65), rgba(212,175,55,.15));
+    transform-origin: top center;
+  }
+  .wheel-label{
+    position:absolute;
+    top:50%; left:50%;
+    width:0; height:0;
+  }
+  .wheel-label span{
+    position:absolute;
+    left:-9px; top:-126px;
+    width:18px;
+    text-align:center;
+    font-size:10.5px;
+    font-weight:bold;
+    color:#fdf6e3;
+    text-shadow:0 0 2px #000, 0 0 4px #000;
+    font-family: Georgia, serif;
+  }
+  .ball-track{
+    position:absolute;
+    inset:6px;
+    border-radius:50%;
+    pointer-events:none;
+  }
+  .hub{
+    position:absolute;
+    top:50%; left:50%;
+    width:64px; height:64px;
+    margin:-32px 0 0 -32px;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 35% 30%, #fff6d6, #d4af37 35%, #8a6c1d 75%, #4a3a10);
+    border:3px solid #4a3a10;
+    z-index:3;
+    box-shadow:0 0 12px rgba(0,0,0,.7), inset 0 0 8px rgba(0,0,0,.4);
+  }
+  .hub::after{
+    content:'';
+    position:absolute;
+    inset:14px;
+    border-radius:50%;
+    background: repeating-conic-gradient(#3a2c0c 0deg 15deg, #5c481a 15deg 30deg);
+    box-shadow: inset 0 0 6px rgba(0,0,0,.7);
+  }
+  .ball{
+    position:absolute;
+    width:13px; height:13px;
+    border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #fff, #ddd 60%, #888);
+    top:10px; left:50%;
+    margin-left:-6.5px;
+    z-index:6;
+    box-shadow:0 1px 3px rgba(0,0,0,.6), 0 0 6px rgba(255,255,255,.8);
+    transition: top 4s cubic-bezier(.12,.7,.1,1);
+  }
+  .ball.dropped{ top:36px; }
+  @keyframes ballSettle{
+    0%{ transform: scale(1); }
+    50%{ transform: scale(1.25); }
+    100%{ transform: scale(1); }
+  }
+  .ball.settle{ animation: ballSettle .4s ease-out; }
+
+  .result-display{
+    margin-top:14px;
+    text-align:center;
+    min-height:50px;
+  }
+  .result-chip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:46px; height:46px;
+    border-radius:50%;
+    font-size:20px;
+    font-weight:bold;
+    color:#fff;
+    border:2px solid var(--gold);
+  }
+
+  /* BETTING PANEL */
+  .panel{
+    background:linear-gradient(160deg, var(--felt), var(--felt-dark));
+    border:8px solid #3a2410;
+    border-radius:16px;
+    padding:24px;
+    width:420px;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.6);
+  }
+  .section-label{
+    font-size:12px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:8px;
+    border-bottom:1px solid rgba(212,175,55,.3);
+    padding-bottom:4px;
+  }
+
+  .number-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap:3px;
+    margin-bottom:16px;
+  }
+  .zero-cell{
+    grid-row: 1 / 4;
+    background:var(--green);
+  }
+  .num-cell, .zero-cell{
+    border:1px solid rgba(0,0,0,.4);
+    color:#fff;
+    font-size:11px;
+    font-weight:bold;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    border-radius:3px;
+    min-height:24px;
+    transition: transform .1s, box-shadow .15s;
+    user-select:none;
+  }
+  .num-cell.red{background:var(--red);}
+  .num-cell.black{background:var(--black);}
+  .num-cell:hover, .zero-cell:hover{ transform:scale(1.1); z-index:2; }
+  .num-cell.selected, .zero-cell.selected{
+    box-shadow:0 0 0 3px var(--gold), 0 0 10px var(--gold);
+    transform:scale(1.12);
+    z-index:2;
+  }
+
+  .color-row{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .color-btn{
+    flex:1;
+    padding:14px;
+    border-radius:8px;
+    text-align:center;
+    font-weight:bold;
+    letter-spacing:1px;
+    cursor:pointer;
+    border:2px solid rgba(0,0,0,.4);
+    color:#fff;
+    transition: transform .1s, box-shadow .15s;
+  }
+  .color-btn.red{background:var(--red);}
+  .color-btn.black{background:var(--black);}
+  .color-btn:hover{transform:scale(1.03);}
+  .color-btn.selected{
+    box-shadow:0 0 0 3px var(--gold), 0 0 14px var(--gold);
+  }
+
+  .bet-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .bet-row label{font-size:13px; color:#e6dcc6;}
+  .bet-row input[type=number]{
+    width:120px;
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px solid var(--gold);
+    background:#0d0d0d;
+    color:var(--gold);
+    font-size:15px;
+    font-weight:bold;
+  }
+  .chip-buttons{display:flex; gap:6px; margin-left:auto;}
+  .chip-btn{
+    width:34px; height:34px;
+    border-radius:50%;
+    border:2px dashed var(--gold);
+    background:transparent;
+    color:var(--gold);
+    font-size:11px;
+    font-weight:bold;
+    cursor:pointer;
+  }
+  .chip-btn:hover{background:rgba(212,175,55,.15);}
+
+  .current-bet-summary{
+    font-size:13px;
+    color:#e6dcc6;
+    margin-bottom:14px;
+    min-height:18px;
+  }
+  .current-bet-summary b{color:var(--gold);}
+
+  .spin-btn{
+    width:100%;
+    padding:14px;
+    border-radius:10px;
+    border:none;
+    background:linear-gradient(180deg, var(--gold), #9c7d22);
+    color:#1a1206;
+    font-size:17px;
+    font-weight:bold;
+    letter-spacing:2px;
+    cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.5);
+    transition: transform .1s, opacity .2s;
+  }
+  .spin-btn:hover:not(:disabled){transform:translateY(-1px);}
+  .spin-btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  .history{
+    margin-top:16px;
+    display:flex;
+    gap:5px;
+    flex-wrap:wrap;
+  }
+  .history .hchip{
+    width:26px; height:26px;
+    border-radius:50%;
+    font-size:10px;
+    font-weight:bold;
+    color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(255,255,255,.3);
+  }
+
+  .game-over{
+    margin-top:14px;
+    text-align:center;
+    color:var(--red);
+    font-weight:bold;
+    display:none;
+  }
+  .reset-btn{
+    margin-top:8px;
+    padding:8px 16px;
+    border-radius:8px;
+    border:1px solid var(--gold);
+    background:transparent;
+    color:var(--gold);
+    cursor:pointer;
+    display:none;
+  }
+</style>
+</head>
+<body>
+
+<h1>★ ROULETTE ★</h1>
+<div class="subtitle">European Single-Zero &middot; Straight-Up pays 35:1 &middot; Red/Black pays 1:1</div>
+
+<div class="balance-bar">
+  <div class="stat"><div class="label">Balance</div><div class="value" id="balance">$10,000</div></div>
+  <div class="stat"><div class="label">Last Result</div><div class="value" id="lastChange">—</div></div>
+  <div class="stat"><div class="label">Spins</div><div class="value" id="spinCount">0</div></div>
+</div>
+
+<div class="table">
+  <div>
+    <div class="wheel-area">
+      <div class="pointer"></div>
+      <div class="wheel-rim"></div>
+      <div class="wheel" id="wheel"></div>
+      <div class="ball-track">
+        <div class="ball" id="ball"></div>
+      </div>
+      <div class="hub"></div>
+    </div>
+    <div class="result-display" id="resultDisplay"></div>
+    <div class="history" id="history"></div>
+  </div>
+
+  <div class="panel">
+    <div class="section-label">Bet on a Number (35:1)</div>
+    <div class="number-grid" id="numberGrid"></div>
+
+    <div class="section-label">Bet on a Color (1:1)</div>
+    <div class="color-row">
+      <div class="color-btn red" data-color="red">RED</div>
+      <div class="color-btn black" data-color="black">BLACK</div>
+    </div>
+
+    <div class="section-label">Wager</div>
+    <div class="bet-row">
+      <label>$</label>
+      <input type="number" id="betAmount" value="100" min="1" step="1">
+      <div class="chip-buttons">
+        <button class="chip-btn" data-amt="50">50</button>
+        <button class="chip-btn" data-amt="100">100</button>
+        <button class="chip-btn" data-amt="500">500</button>
+        <button class="chip-btn" data-amt="1000">1K</button>
+      </div>
+    </div>
+
+    <div class="current-bet-summary" id="betSummary">Select a number or color to bet on.</div>
+
+    <button class="spin-btn" id="spinBtn">SPIN THE WHEEL</button>
+    <div class="game-over" id="gameOver">You're out of chips! Game over.</div>
+    <button class="reset-btn" id="resetBtn">Reset Balance to $10,000</button>
+  </div>
+</div>
+
+<script>
+// European roulette wheel order (single zero)
+const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+
+function colorOf(n){
+  if(n===0) return 'green';
+  return RED_NUMBERS.has(n) ? 'red' : 'black';
+}
+
+let balance = 10000;
+let spinCount = 0;
+let selectedNumber = null;
+let selectedColor = null;
+let spinning = false;
+let currentWheelRotation = 0;
+
+const balanceEl = document.getElementById('balance');
+const lastChangeEl = document.getElementById('lastChange');
+const spinCountEl = document.getElementById('spinCount');
+const betSummaryEl = document.getElementById('betSummary');
+const resultDisplayEl = document.getElementById('resultDisplay');
+const historyEl = document.getElementById('history');
+const spinBtn = document.getElementById('spinBtn');
+const gameOverEl = document.getElementById('gameOver');
+const resetBtn = document.getElementById('resetBtn');
+const betAmountInput = document.getElementById('betAmount');
+
+function buildNumberGrid(){
+  const grid = document.getElementById('numberGrid');
+  const zero = document.createElement('div');
+  zero.className = 'zero-cell';
+  zero.textContent = '0';
+  zero.dataset.num = 0;
+  grid.appendChild(zero);
+  for(let n=1; n<=36; n++){
+    const cell = document.createElement('div');
+    cell.className = 'num-cell ' + colorOf(n);
+    cell.textContent = n;
+    cell.dataset.num = n;
+    grid.appendChild(cell);
+  }
+  grid.addEventListener('click', (e)=>{
+    const cell = e.target.closest('[data-num]');
+    if(!cell || spinning) return;
+    document.querySelectorAll('.num-cell.selected, .zero-cell.selected').forEach(c=>c.classList.remove('selected'));
+    document.querySelectorAll('.color-btn.selected').forEach(c=>c.classList.remove('selected'));
+    cell.classList.add('selected');
+    selectedNumber = parseInt(cell.dataset.num);
+    selectedColor = null;
+    updateBetSummary();
+  });
+}
+
+document.querySelectorAll('.color-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(spinning) return;
+    document.querySelectorAll('.color-btn.selected').forEach(c=>c.classList.remove('selected'));
+    document.querySelectorAll('.num-cell.selected, .zero-cell.selected').forEach(c=>c.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedColor = btn.dataset.color;
+    selectedNumber = null;
+    updateBetSummary();
+  });
+});
+
+document.querySelectorAll('.chip-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    betAmountInput.value = btn.dataset.amt;
+  });
+});
+
+function updateBetSummary(){
+  const amt = parseInt(betAmountInput.value) || 0;
+  if(selectedNumber !== null){
+    betSummaryEl.innerHTML = `Betting <b>$${amt.toLocaleString()}</b> on number <b>${selectedNumber}</b> (${colorOf(selectedNumber)}) &mdash; pays 35:1`;
+  } else if(selectedColor){
+    betSummaryEl.innerHTML = `Betting <b>$${amt.toLocaleString()}</b> on <b>${selectedColor.toUpperCase()}</b> &mdash; pays 1:1`;
+  } else {
+    betSummaryEl.textContent = 'Select a number or color to bet on.';
+  }
+}
+betAmountInput.addEventListener('input', updateBetSummary);
+
+const WHEEL_COLORS = { red:'#b91c24', black:'#161616', green:'#157a42' };
+const SLICE = 360 / WHEEL_ORDER.length;
+
+function buildWheel(){
+  const wheel = document.getElementById('wheel');
+
+  // Conic-gradient pockets: slice i spans [i*SLICE, (i+1)*SLICE] clockwise from top (0deg).
+  const stops = WHEEL_ORDER.map((num, i)=>{
+    const start = (i * SLICE).toFixed(4);
+    const end = ((i + 1) * SLICE).toFixed(4);
+    return `${WHEEL_COLORS[colorOf(num)]} ${start}deg ${end}deg`;
+  }).join(', ');
+  wheel.style.background = `conic-gradient(from 0deg, ${stops})`;
+
+  // Gold separator lines at each pocket boundary.
+  WHEEL_ORDER.forEach((num, i)=>{
+    const sep = document.createElement('div');
+    sep.className = 'wheel-sep';
+    sep.style.transform = `rotate(${i * SLICE}deg)`;
+    wheel.appendChild(sep);
+  });
+
+  // Radial number labels centered in each pocket.
+  WHEEL_ORDER.forEach((num, i)=>{
+    const center = i * SLICE + SLICE / 2;
+    const label = document.createElement('div');
+    label.className = 'wheel-label';
+    label.style.transform = `rotate(${center}deg)`;
+    const span = document.createElement('span');
+    span.textContent = num;
+    label.appendChild(span);
+    wheel.appendChild(label);
+  });
+}
+
+function updateBalanceDisplay(){
+  balanceEl.textContent = '$' + balance.toLocaleString();
+  spinCountEl.textContent = spinCount;
+  if(balance <= 0){
+    spinBtn.disabled = true;
+    gameOverEl.style.display = 'block';
+    resetBtn.style.display = 'inline-block';
+  }
+}
+
+function spin(){
+  if(spinning) return;
+  const amt = parseInt(betAmountInput.value);
+  if(!amt || amt < 1){ alert('Enter a valid bet amount.'); return; }
+  if(selectedNumber === null && !selectedColor){ alert('Pick a number or a color first.'); return; }
+  if(amt > balance){ alert('You cannot bet more than your balance.'); return; }
+
+  spinning = true;
+  spinBtn.disabled = true;
+
+  const ball = document.getElementById('ball');
+  ball.classList.remove('dropped', 'settle');
+
+  const winningIndex = Math.floor(Math.random() * WHEEL_ORDER.length);
+  const winningNumber = WHEEL_ORDER[winningIndex];
+
+  // Center angle (clockwise from top) of the winning pocket.
+  const pocketCenter = winningIndex * SLICE + SLICE / 2;
+
+  // To bring pocketCenter under the pointer (0deg/top), the wheel must rotate
+  // by an amount R such that (pocketCenter + R) mod 360 == 0.
+  const extraSpins = 6 + Math.floor(Math.random() * 3);
+  const baseOffset = (360 - pocketCenter) % 360;
+  // Keep rotation monotonically increasing from the current angle for a natural spin direction.
+  const currentMod = ((currentWheelRotation % 360) + 360) % 360;
+  let delta = baseOffset - currentMod;
+  if (delta <= 0) delta += 360;
+  const newRotation = currentWheelRotation + extraSpins * 360 + delta;
+  currentWheelRotation = newRotation;
+
+  const wheel = document.getElementById('wheel');
+  wheel.style.transform = `rotate(${newRotation}deg)`;
+  ball.classList.add('dropped');
+
+  setTimeout(()=>{
+    ball.classList.add('settle');
+    resolveBet(winningNumber, amt);
+    spinning = false;
+    spinBtn.disabled = balance <= 0;
+  }, 4000);
+}
+
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(ctx, freq, startTime, duration, type='sine', volume=0.25){
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+function playWinSound(){
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6 - bright ascending chime
+  notes.forEach((freq, i)=>{
+    playTone(ctx, freq, now + i*0.09, 0.35, 'triangle', 0.22);
+  });
+}
+
+function playLoseSound(){
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+  const notes = [220, 196, 164.81]; // descending low buzz
+  notes.forEach((freq, i)=>{
+    playTone(ctx, freq, now + i*0.13, 0.4, 'sawtooth', 0.16);
+  });
+}
+
+function resolveBet(winningNumber, amt){
+  const wColor = colorOf(winningNumber);
+  let win = false;
+  let payout = 0;
+
+  if(selectedNumber !== null){
+    if(selectedNumber === winningNumber){
+      win = true;
+      payout = amt * 35;
+    }
+  } else if(selectedColor){
+    if(wColor === selectedColor){
+      win = true;
+      payout = amt * 1;
+    }
+  }
+
+  if(win){
+    balance += payout;
+    lastChangeEl.textContent = '+$' + payout.toLocaleString();
+    lastChangeEl.className = 'value pos';
+    playWinSound();
+  } else {
+    balance -= amt;
+    lastChangeEl.textContent = '-$' + amt.toLocaleString();
+    lastChangeEl.className = 'value neg';
+    playLoseSound();
+  }
+  spinCount++;
+  updateBalanceDisplay();
+
+  const chip = document.createElement('div');
+  chip.className = 'result-chip';
+  chip.style.background = wColor==='red' ? '#c0252c' : wColor==='black' ? '#1a1a1a' : '#1f8a4c';
+  chip.textContent = winningNumber;
+  resultDisplayEl.innerHTML = '';
+  resultDisplayEl.appendChild(chip);
+  const msg = document.createElement('div');
+  msg.style.marginTop = '6px';
+  msg.style.fontSize = '13px';
+  msg.textContent = win ? `Winner! ${winningNumber} (${wColor}) — you won $${payout.toLocaleString()}` : `${winningNumber} (${wColor}) — you lost $${amt.toLocaleString()}`;
+  msg.style.color = win ? '#3fcf6f' : '#e08080';
+  resultDisplayEl.appendChild(msg);
+
+  const hchip = document.createElement('div');
+  hchip.className = 'hchip';
+  hchip.style.background = wColor==='red' ? '#c0252c' : wColor==='black' ? '#1a1a1a' : '#1f8a4c';
+  hchip.textContent = winningNumber;
+  historyEl.prepend(hchip);
+  while(historyEl.children.length > 20) historyEl.removeChild(historyEl.lastChild);
+}
+
+spinBtn.addEventListener('click', spin);
+
+resetBtn.addEventListener('click', ()=>{
+  balance = 10000;
+  spinCount = 0;
+  gameOverEl.style.display = 'none';
+  resetBtn.style.display = 'none';
+  spinBtn.disabled = false;
+  lastChangeEl.textContent = '—';
+  lastChangeEl.className = 'value';
+  updateBalanceDisplay();
+});
+
+buildNumberGrid();
+buildWheel();
+updateBalanceDisplay();
+</script>
+</body>
+</html>
