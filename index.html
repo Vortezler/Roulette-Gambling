@@ -340,9 +340,73 @@
     cursor:pointer;
     display:none;
   }
+
+  .all-in-btn{
+    width:100%;
+    padding:11px;
+    margin-bottom:14px;
+    border-radius:8px;
+    border:2px solid var(--red);
+    background:transparent;
+    color:#ff8a8a;
+    font-weight:bold;
+    letter-spacing:2px;
+    cursor:pointer;
+    transition: all .2s;
+  }
+  .all-in-btn:hover{ background:rgba(192,37,44,.15); }
+  .all-in-btn.active{
+    background: linear-gradient(180deg, var(--red), #7a1418);
+    color:#fff;
+    box-shadow:0 0 16px rgba(192,37,44,.7);
+    animation: allInPulse 1.4s infinite;
+  }
+  @keyframes allInPulse{
+    0%,100%{ box-shadow:0 0 10px rgba(192,37,44,.6); }
+    50%{ box-shadow:0 0 22px rgba(192,37,44,.95); }
+  }
+
+  /* SCREEN EFFECTS */
+  #fxCanvas{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    z-index:999;
+  }
+  .win-flash{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:998;
+    background: radial-gradient(circle, rgba(255,215,90,.35) 0%, rgba(255,215,90,0) 65%);
+    opacity:0;
+  }
+  .win-flash.flashing{
+    animation: winFlashAnim 1s ease-out;
+  }
+  @keyframes winFlashAnim{
+    0%{ opacity:0; }
+    15%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+  body.win-shake{
+    animation: winShake .4s ease-in-out;
+  }
+  @keyframes winShake{
+    0%,100%{ transform: translate(0,0); }
+    20%{ transform: translate(-4px,2px); }
+    40%{ transform: translate(4px,-2px); }
+    60%{ transform: translate(-3px,-2px); }
+    80%{ transform: translate(3px,2px); }
+  }
 </style>
 </head>
 <body>
+
+<canvas id="fxCanvas"></canvas>
+<div class="win-flash" id="winFlash"></div>
 
 <h1>★ ROULETTE ★</h1>
 <div class="subtitle">European Single-Zero &middot; Straight-Up pays 35:1 &middot; Red/Black pays 1:1</div>
@@ -392,6 +456,8 @@
 
     <div class="current-bet-summary" id="betSummary">Select a number or color to bet on.</div>
 
+    <button class="all-in-btn" id="allInBtn">ALL IN: OFF</button>
+
     <button class="spin-btn" id="spinBtn">SPIN THE WHEEL</button>
     <div class="game-over" id="gameOver">You're out of chips! Game over.</div>
     <button class="reset-btn" id="resetBtn">Reset Balance to $10,000</button>
@@ -425,6 +491,8 @@ const spinBtn = document.getElementById('spinBtn');
 const gameOverEl = document.getElementById('gameOver');
 const resetBtn = document.getElementById('resetBtn');
 const betAmountInput = document.getElementById('betAmount');
+const allInBtn = document.getElementById('allInBtn');
+let allInMode = false;
 
 function buildNumberGrid(){
   const grid = document.getElementById('numberGrid');
@@ -482,6 +550,18 @@ function updateBetSummary(){
 }
 betAmountInput.addEventListener('input', updateBetSummary);
 
+allInBtn.addEventListener('click', ()=>{
+  if(spinning) return;
+  allInMode = !allInMode;
+  allInBtn.textContent = allInMode ? 'ALL IN: ON' : 'ALL IN: OFF';
+  allInBtn.classList.toggle('active', allInMode);
+  betAmountInput.disabled = allInMode;
+  if(allInMode){
+    betAmountInput.value = balance;
+  }
+  updateBetSummary();
+});
+
 const WHEEL_COLORS = { red:'#b91c24', black:'#161616', green:'#157a42' };
 const SLICE = 360 / WHEEL_ORDER.length;
 
@@ -529,6 +609,7 @@ function updateBalanceDisplay(){
 
 function spin(){
   if(spinning) return;
+  if(allInMode) betAmountInput.value = balance;
   const amt = parseInt(betAmountInput.value);
   if(!amt || amt < 1){ alert('Enter a valid bet amount.'); return; }
   if(selectedNumber === null && !selectedColor){ alert('Pick a number or a color first.'); return; }
@@ -607,6 +688,111 @@ function playLoseSound(){
   });
 }
 
+// ===== Fireworks / screen effects =====
+const fxCanvas = document.getElementById('fxCanvas');
+const fxCtx = fxCanvas.getContext('2d');
+const winFlashEl = document.getElementById('winFlash');
+let fxParticles = [];
+let fxRockets = [];
+let fxAnimHandle = null;
+
+function resizeFxCanvas(){
+  fxCanvas.width = window.innerWidth;
+  fxCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeFxCanvas);
+resizeFxCanvas();
+
+const FIREWORK_COLORS = ['#ffd24a','#ff6b6b','#6bd4ff','#7dff8a','#ff8af0','#ffffff','#ffae42'];
+
+function spawnRocket(){
+  const x = 40 + Math.random() * (fxCanvas.width - 80);
+  const targetY = fxCanvas.height * (0.18 + Math.random() * 0.28);
+  fxRockets.push({
+    x, y: fxCanvas.height,
+    targetY,
+    vy: -(9 + Math.random() * 3),
+    color: FIREWORK_COLORS[Math.floor(Math.random()*FIREWORK_COLORS.length)]
+  });
+}
+
+function explodeRocket(rocket){
+  const count = 36 + Math.floor(Math.random()*18);
+  for(let i=0; i<count; i++){
+    const angle = (Math.PI * 2 * i) / count + Math.random()*0.2;
+    const speed = 2 + Math.random() * 4;
+    fxParticles.push({
+      x: rocket.x, y: rocket.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.012 + Math.random()*0.012,
+      color: rocket.color,
+      size: 2 + Math.random()*2
+    });
+  }
+}
+
+function fxStep(){
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+  for(let i = fxRockets.length - 1; i >= 0; i--){
+    const r = fxRockets[i];
+    r.y += r.vy;
+    r.vy += 0.12;
+    fxCtx.beginPath();
+    fxCtx.fillStyle = r.color;
+    fxCtx.arc(r.x, r.y, 2.5, 0, Math.PI*2);
+    fxCtx.fill();
+    if(r.vy >= 0 || r.y <= r.targetY){
+      explodeRocket(r);
+      fxRockets.splice(i, 1);
+    }
+  }
+
+  for(let i = fxParticles.length - 1; i >= 0; i--){
+    const p = fxParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.06; // gravity
+    p.vx *= 0.99;
+    p.life -= p.decay;
+    if(p.life <= 0){
+      fxParticles.splice(i, 1);
+      continue;
+    }
+    fxCtx.globalAlpha = Math.max(p.life, 0);
+    fxCtx.beginPath();
+    fxCtx.fillStyle = p.color;
+    fxCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    fxCtx.fill();
+    fxCtx.globalAlpha = 1;
+  }
+
+  if(fxRockets.length || fxParticles.length){
+    fxAnimHandle = requestAnimationFrame(fxStep);
+  } else {
+    fxAnimHandle = null;
+  }
+}
+
+function launchFireworks(){
+  const bursts = 5;
+  for(let i=0; i<bursts; i++){
+    setTimeout(()=> spawnRocket(), i * 220);
+  }
+  if(!fxAnimHandle) fxAnimHandle = requestAnimationFrame(fxStep);
+
+  winFlashEl.classList.remove('flashing');
+  // restart animation
+  void winFlashEl.offsetWidth;
+  winFlashEl.classList.add('flashing');
+
+  document.body.classList.remove('win-shake');
+  void document.body.offsetWidth;
+  document.body.classList.add('win-shake');
+}
+
 function resolveBet(winningNumber, amt){
   const wColor = colorOf(winningNumber);
   let win = false;
@@ -629,6 +815,7 @@ function resolveBet(winningNumber, amt){
     lastChangeEl.textContent = '+$' + payout.toLocaleString();
     lastChangeEl.className = 'value pos';
     playWinSound();
+    launchFireworks();
   } else {
     balance -= amt;
     lastChangeEl.textContent = '-$' + amt.toLocaleString();
@@ -669,7 +856,13 @@ resetBtn.addEventListener('click', ()=>{
   spinBtn.disabled = false;
   lastChangeEl.textContent = '—';
   lastChangeEl.className = 'value';
+  allInMode = false;
+  allInBtn.textContent = 'ALL IN: OFF';
+  allInBtn.classList.remove('active');
+  betAmountInput.disabled = false;
+  betAmountInput.value = 100;
   updateBalanceDisplay();
+  updateBetSummary();
 });
 
 buildNumberGrid();
